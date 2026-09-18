@@ -58,6 +58,20 @@ The predicted, post-processed profile is the **return value** of `solve()` (as w
 PyRolL post-processor); `roll_pass.out_profile` itself reflects the pre-post-processing
 (un-bulged) geometry.
 
+### Fallback for inconsistent predicted widths
+
+The out-profile width comes from an independently calibrated spread model
+(see "Model scope" above), so it is not guaranteed to be consistent with the
+eccentricity/radius this plugin computes from it. Where a corner's bulge circle can't
+be reconciled with the roll's own contour within its own 60° corner sector, the plugin
+falls back to returning the profile with its plain, un-bulged cross-section from
+`pyroll-core` unchanged, rather than emit an implausible "necked" shape — in this case
+`bulge_eccentricity`/`bulge_radius` are both `None`. See `docs/docs.tex`
+(Sections "Construction method" and "Fallback for inconsistent predicted widths") for
+the full explanation and figures, and
+`tests/test_three_roll_byon_koval.py::test_byon_pass_1_round_to_koval` for a worked
+example that hits it.
+
 ## Validation
 
 The three-roll models are validated against the source papers' own figures by reproducing

@@ -115,7 +115,12 @@ def test_byon_sequence_with_predicted_spread():
 
     for profile, label in [(profile_1, "stand_1"), (profile_2, "stand_2")]:
         assert profile.cross_section.is_valid, f"{label}: invalid cross-section"
-        assert profile.bulge_radius > 0
+        # Either the bulge model applied (bulge_radius > 0), or it correctly recognized the
+        # predicted width/eccentricity combination as outside its valid range and fell back to
+        # the plain pyroll-core cross-section instead of an unphysical shape (bulge_radius is
+        # None then) - see BulgeModelNotApplicable and test_three_roll_byon_koval.py's
+        # test_byon_pass_1_round_to_koval, which hits exactly this for stand 1's own pass type.
+        assert profile.bulge_radius is None or profile.bulge_radius > 0, f"{label}: invalid bulge_radius"
 
     assert profile_2.cross_section.area < profile_1.cross_section.area
 

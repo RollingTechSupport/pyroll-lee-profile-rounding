@@ -147,19 +147,104 @@
     or the roll's own un-bulged contour (full roll contact). This is deliberately
     \emph{not} built via the union of the three, generally overlapping, corner circles
     intersected with the roll contour, since that is prone to a spurious reentrant
-    cusp wherever two such shapes cross without being exactly tangent there. Sampling
-    the two candidate radii directly instead guarantees a shape with no self-crossings
-    and keeps the residual non-smoothness to a minimum, but cannot remove it
-    entirely: two neighboring corners' bulge circles are not, in general, tangent to
-    each other or to the roll contour at the point where the model hands off between
-    them, so a small change in slope at that point is an inherent feature of
-    connecting three independently-fitted per-corner arc formulas into one closed
-    cross-section - most visible for a heavily-reduced first (round-input) pass, where
-    the eccentricity is large relative to the spacing between corners (see the round
-    $\to$ Koval case in Fig.~\ref{fig:validation-byon}). The source papers validate
-    each corner's own arc against a one sixth-symmetric sector of FE/experimental data
+    cusp wherever two such shapes cross without being exactly tangent there (see
+    Fig.~\ref{fig:construction} and the discussion in
+    Section~\ref{subsec:construction-method}). Sampling the two candidate radii
+    directly instead guarantees a shape with no self-crossings and keeps the residual
+    non-smoothness to a minimum, but cannot remove it entirely: two neighboring
+    corners' bulge circles are not, in general, tangent to each other or to the roll
+    contour at the point where the model hands off between them, so a small change in
+    slope at that point is an inherent feature of connecting three
+    independently-fitted per-corner arc formulas into one closed cross-section - most
+    visible for a heavily-reduced first (round-input) pass, where the eccentricity is
+    large relative to the spacing between corners (see the round $\to$ Koval case in
+    Fig.~\ref{fig:validation-byon}). The source papers validate each corner's own arc
+    against a one sixth-symmetric sector of FE/experimental data
     (Section~\ref{sec:validation}) and do not themselves address the smoothness of the
-    reassembled full cross-section.
+    reassembled full cross-section. Section~\ref{subsec:construction-method} shows,
+    with figures, exactly how each corner's arc is delimited and handed off to its
+    neighbor; Section~\ref{subsec:fallback} covers what happens when the predicted
+    width makes a corner's own arc inconsistent with this construction altogether.
+
+    \subsection{Construction method}\label{subsec:construction-method}
+
+    Figure~\ref{fig:construction} illustrates the two building blocks used above, both
+    from early exploratory scripts kept here for their explanatory value (they are not
+    part of the shipped model). The left panel shows Min's linear-chamfer construction
+    (Section~\ref{subsec:min}) for one corner of a curved-hexagonal $\to$ hexagonal
+    pass: the plain hexagonal roll-face contour (green, the \texttt{"core (clip at
+    rp.height)"} in the legend) is replaced near the corner by the two straight chords
+    from $W_1$ (magenta/blue, where each roll face crosses the circle of radius $B_1$)
+    to the corner tip $B_1$ itself, exactly as implemented in
+    \texttt{\_linear\_chamfer\_cross\_section}. The right panel shows why the circular
+    cases are \emph{not} built by simply assigning each of the three corner circles
+    (radius $R_s$, center offset by eccentricity $P_c$) to its own \SI{120}{\degree}
+    sector without further restriction: for a large eccentricity relative to the
+    corner spacing, as in a heavily reduced round $\to$ Koval first pass, each corner's
+    own circle is only valid close to its own tip, but stays numerically defined --
+    and numerically smaller than it should be -- all the way into the neighboring
+    corners' territory. Simply switching between corners at the sector boundary then
+    produces exactly this kind of "clover", pinched down to a fraction of the corner
+    radius exactly between corners, rather than the plausible, convex shape the source
+    paper actually depicts -- this is, in fact, precisely the unphysical shape a
+    predicted width can trigger if the plugin does \emph{not} check for it (see
+    Section~\ref{subsec:fallback} below): restricting each corner's circle to its own
+    corner-local range via \texttt{\_corner\_crossing\_offset}, and falling back
+    entirely when even that corner-local range cannot be made consistent with the
+    roll's natural contour, is what avoids ever emitting a shape like this one.
+
+    \begin{figure}[htbp]
+        \centering
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/construction_linear_chamfer.png}
+            \caption{Linear-chamfer construction (Min, curved-hex $\to$ hex): the
+                hexagonal core contour (green) is replaced near each corner by the
+                two chords to $W_1$ (colored per face) and on to $B_1$.}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{figures/construction_naive_union_pitfall.png}
+            \caption{Naively assigning each of the three corner circles to its own \SI{120}{\degree} sector, unrestricted (large-eccentricity round $\to$ Koval case): a pinched "clover", exactly the kind of unphysical shape \texttt{\_corner\_crossing\_offset} and the Section~\ref{subsec:fallback} fallback exist to prevent.}
+        \end{subfigure}
+        \caption{Illustrative constructions behind the linear-chamfer and circular-arc
+            cross-section builders (exploratory scripts, not shipped model code).}
+        \label{fig:construction}
+    \end{figure}
+
+    \subsection{Fallback for inconsistent predicted widths}\label{subsec:fallback}
+
+    Because the predicted width $B_1$ comes from an independent, separately calibrated
+    spread model (Section~\ref{sec:model-scope}), it is not guaranteed to be
+    consistent with the eccentricity/radius this plugin computes from it. Before
+    tracing the free surface, \texttt{\_corner\_crossing\_offset} searches outward from
+    a corner, up to its own \SI{60}{\degree} half-sector, for the angle at which that
+    corner's own bulge circle first becomes at least as large as the roll's natural
+    (un-bulged) contour; beyond that offset the plain contour is used instead (this is
+    the mechanism restricting each corner's circle to its own corner-local range,
+    referenced in Section~\ref{subsec:construction-method} above). If no such crossing
+    exists anywhere within the half-sector -- i.e.\ the circle stays smaller than the
+    natural contour all the way into the \emph{next} corner's own territory -- or if
+    the computed radius of curvature itself comes out non-positive, the predicted
+    width is judged inconsistent with the model for this pass, and
+    \texttt{ThreeRollBulgingModel.solve} raises
+    \texttt{BulgeModelNotApplicable} internally and catches it, logging a warning and
+    falling back to returning the profile with its plain, un-bulged cross-section from
+    \texttt{pyroll-core} unchanged, rather than emitting the "necked" shape of
+    Fig.~\ref{fig:construction}(b). In this case
+    \texttt{ThreeRollPass.OutProfile.bulge\_eccentricity} and \texttt{.bulge\_radius}
+    are both \texttt{None}, which calling code can check to detect that the fallback
+    was used. \texttt{tests/test\_three\_roll\_byon\_koval.py}'s
+    \texttt{test\_byon\_pass\_1\_round\_to\_koval} exercises this directly: Byon's own
+    round $\to$ Koval eccentricity formula, applied to a heavily reduced first pass
+    (\SI{71}{mm} round stock into a \SI{59.9}{mm} inscribed-circle Koval groove),
+    predicts an eccentricity so large that no crossing exists for any reasonable
+    groove shape at that inscribed circle diameter; Fig.~\ref{fig:validation-byon}(a)
+    and the overlay in Fig.~\ref{fig:validation-byon-overlay} show the resulting
+    fallback (angular, core) shape next to the true digitized bulge, honestly showing
+    where the model declines to guess rather than silently producing an implausible
+    shape.
 
     \section{Two-roll passes}\label{sec:two-roll}
 
@@ -203,7 +288,8 @@
         \begin{subfigure}[t]{0.48\textwidth}
             \centering
             \includegraphics[width=\textwidth]{../tests/output/byon_pass_1_round_to_koval.png}
-            \caption{Byon et al., round $\to$ Koval (pass 1).}
+            \caption{Byon et al., round $\to$ Koval (pass 1) -- falls back to the plain
+                core cross-section, see Section~\ref{subsec:fallback}.}
         \end{subfigure}
         \hfill
         \begin{subfigure}[t]{0.48\textwidth}
@@ -218,15 +304,81 @@
     Coordinates were read off 300 dpi page renders of the source PDFs by eye against
     the printed axis gridlines; typical reading uncertainty is $\pm 0.5$--$1$\,mm
     for the millimeter-scale shape plots and $\pm 0.01$--$0.03$ for the dimensionless
-    spread/eccentricity calibration plots (Figs.~7, 9, 12). Byon's Figs.~8--10 plot one
-    sixth-symmetric sector of the shape in the paper's own local axis orientation,
-    which is not necessarily aligned with this plugin's own corner-angle convention;
-    those comparisons are therefore shown side by side rather than overlaid.
+    spread/eccentricity calibration plots (Figs.~7, 9, 12).
     \texttt{tests/test\_three\_roll\_bulge\_formulas.py} additionally validates the
     eccentricity coefficients (\num{2.40}, \num{3.133}) directly against the digitized
     FE calibration data of Figs.~7 and 12, and the closed-form Koval $\to$ round
     eccentricity against its defining equations, independent of any PyRolL geometry
     construction.
+
+    \subsection{Overlay comparison}\label{subsec:validation-overlay}
+
+    The side-by-side figures above make the overall shape easy to compare but not the
+    small change in slope where a corner's bulge circle hands off to the plain contour
+    (Section~\ref{subsec:three-roll-impl}); Fig.~\ref{fig:validation-overlay} and
+    Fig.~\ref{fig:validation-byon-overlay} instead plot the digitized reference and
+    the PyRolL prediction directly on top of each other on the same axes. For Min's
+    data (a right-half trace, mirrored about $z=0$ to a full boundary and rotated
+    \SI{180}{\degree} to align the paper's own drawing orientation with this plugin's
+    corner-angle convention) the two curves are close enough that the hand-off is not
+    visually distinguishable from the digitized shape's own reading noise, except for
+    the curved-hexagonal $\to$ hexagonal pass, where a real, larger size mismatch is
+    visible -- a known limitation of the approximate (non-exact) groove parameters used
+    for that test case, not of the construction method itself. For Byon's data (one
+    sixth-symmetric sector, reconstructed to a full boundary by mirroring and
+    threefold rotation, see \texttt{reconstruct\_threefold\_sector} in
+    \texttt{tests/visual.py}) the match is close for passes 2, 3 and 7; pass 1 instead
+    overlays the \emph{fallback} shape against the true digitized bulge, by
+    construction not matching it, as the honest visualization of
+    Section~\ref{subsec:fallback}'s fallback case.
+
+    \begin{figure}[htbp]
+        \centering
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../tests/output/min_pass_1_round_to_curved_hexagonal_overlay.png}
+            \caption{Min et al., round $\to$ curved-hexagonal.}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../tests/output/min_pass_2_curved_hexagonal_to_hexagonal_overlay.png}
+            \caption{Min et al., curved-hexagonal $\to$ hexagonal.}
+        \end{subfigure}
+        \caption{Digitized reference (orange) overlaid on the PyRolL prediction (blue).}
+        \label{fig:validation-overlay}
+    \end{figure}
+
+    \begin{figure}[htbp]
+        \centering
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../tests/output/byon_pass_1_round_to_koval_overlay.png}
+            \caption{Round $\to$ Koval (pass 1): fallback shape vs.\ true bulge.}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../tests/output/byon_pass_2_koval_to_koval_overlay.png}
+            \caption{Koval $\to$ Koval (pass 2).}
+        \end{subfigure}
+
+        \vspace{1em}
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../tests/output/byon_pass_3_koval_to_koval_overlay.png}
+            \caption{Koval $\to$ Koval (pass 3).}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../tests/output/byon_pass_7_koval_to_round_overlay.png}
+            \caption{Koval $\to$ round (pass 7, final).}
+        \end{subfigure}
+        \caption{Digitized reference (orange, reconstructed from one sixth-symmetric
+            sector) overlaid on the PyRolL prediction (blue).}
+        \label{fig:validation-byon-overlay}
+    \end{figure}
 
     \texttt{tests/test\_three\_roll\_end\_to\_end\_spreading.py} complements this with
     a fully predictive (not pinned-width) demonstration: two-pass sequences for both
@@ -234,7 +386,14 @@
     \texttt{pyroll-wusatowski-\allowbreak spreading} fed by
     \texttt{pyroll-lendl-\allowbreak equivalent-\allowbreak method}
     (Section~\ref{sec:model-scope}), and this plugin's bulging model applying on top
-    with no manual intervention, as a real user of the plugin would run it.
+    with no manual intervention, as a real user of the plugin would run it. Since
+    Wusatowski's is a generic flat-rolling formula rather than Min's or Byon's own
+    three-roll-specific spread equation, its predicted width for the Byon-style
+    sequence's first pass triggers the very fallback described in
+    Section~\ref{subsec:fallback} (unlike the pinned-width case of
+    Fig.~\ref{fig:validation-byon}(a), which is pinned to the paper's own, smaller,
+    validated width) -- a realistic illustration of the fallback guarding a real
+    spread-prediction chain, not just a hand-picked pinned-width test case.
 
     \begin{figure}[htbp]
         \centering

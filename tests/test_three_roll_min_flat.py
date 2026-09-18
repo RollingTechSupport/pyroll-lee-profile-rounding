@@ -5,7 +5,10 @@ sequence). The predicted out-profile width is pinned to the digitized shape's ow
 radius for each pass (see ``tests/visual.py``), so that only the free-surface (bulge/rounding)
 model is under test, independent of spread prediction.
 
-Produces side-by-side comparison plots under ``tests/output/`` for human visual review.
+Produces both side-by-side and overlaid comparison plots under ``tests/output/`` for human
+visual review; the overlay makes it easy to see that the small change in slope where the
+bulge circle hands off to the plain contour (see ``three_roll_pass.py``) is not visible at the
+scale of an actual rolled profile.
 """
 from shapely import Polygon
 
@@ -14,16 +17,13 @@ from pyroll.core import FlatGroove, Profile, Roll, ThreeRollPass
 import pyroll.profile_bulging  # noqa: F401  (registers the bulging post-processors)
 
 from data.min2003 import PASS_1_BOUNDARY_MM, PASS_2_BOUNDARY_MM, PROCESS_PARAMS
-from visual import max_radius_mm, pin_width, plot_comparison
+from visual import max_radius_mm, mirror_right_half, pin_width, plot_comparison, plot_overlay, rotate_points
 
 
 def digitized_polygon_area_mm2(right_half_boundary_mm):
     """Area of the full (mirrored) polygon described by a right-half boundary trace, via the
     shoelace formula."""
-    left_half = [(-x, y) for x, y in reversed(right_half_boundary_mm)]
-    points = list(right_half_boundary_mm) + left_half
-    polygon = Polygon(points)
-    return polygon.area
+    return Polygon(mirror_right_half(right_half_boundary_mm)).area
 
 
 def solve_pass_1():
@@ -70,6 +70,13 @@ def solve_pass_1():
         PASS_1_BOUNDARY_MM,
         reference_label="Digitized Fig. 2(a)/13(a) (right half)",
     )
+    plot_overlay(
+        "min_pass_1_round_to_curved_hexagonal_overlay.png",
+        "Min et al. (2003) Fig. 2(a)/13(a): round -> curved-hexagonal (overlay)",
+        out_profile,
+        rotate_points(mirror_right_half(PASS_1_BOUNDARY_MM), 180),
+        reference_label="Digitized Fig. 2(a)/13(a) (rotated 180 deg to this plugin's own corner convention)",
+    )
 
     return out_profile
 
@@ -112,4 +119,11 @@ def test_min_pass_2_curved_hexagonal_to_hexagonal():
         out_profile,
         PASS_2_BOUNDARY_MM,
         reference_label="Digitized Fig. 2(b)/13(b) (right half)",
+    )
+    plot_overlay(
+        "min_pass_2_curved_hexagonal_to_hexagonal_overlay.png",
+        "Min et al. (2003) Fig. 2(b)/13(b): curved-hexagonal -> hexagonal (overlay)",
+        out_profile,
+        rotate_points(mirror_right_half(PASS_2_BOUNDARY_MM), 180),
+        reference_label="Digitized Fig. 2(b)/13(b) (rotated 180 deg to this plugin's own corner convention)",
     )

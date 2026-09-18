@@ -27,7 +27,7 @@ from data.byon2017 import (
     PASS_3_BOUNDARY_MM,
     PASS_7_BOUNDARY_MM,
 )
-from visual import max_radius_mm, pin_width, plot_comparison
+from visual import max_radius_mm, pin_width, plot_comparison, plot_overlay, reconstruct_threefold_sector
 
 
 def in_profile():
@@ -90,19 +90,36 @@ def solve_pass_3():
 
 
 def test_byon_pass_1_round_to_koval():
+    """Demonstrates the fallback to the plain (un-bulged) pyroll-core cross-section: for this
+    pass (a large first-pass reduction, 71 mm round stock into a 59.9 mm inscribed-circle Koval
+    groove), Byon's own eccentricity formula predicts an eccentricity so large relative to the
+    spread tip radius that the free-surface arc would have to be trusted well outside the
+    corner-local range it was fitted for (see ``BulgeModelNotApplicable`` in
+    ``three_roll_pass.py``) for *any* reasonable groove shape at this inscribed circle diameter
+    - not just the approximate groove geometry used here, since varying the groove's own r2/
+    usable_width leaves the predicted eccentricity essentially unchanged. The plugin detects
+    this and falls back rather than producing the unphysical, "necked" shape an unguarded
+    union of the three corner circles would otherwise give."""
     roll_pass, out_profile = solve_pass_1()
 
     assert out_profile.cross_section.is_valid
-    assert out_profile.bulge_eccentricity >= 0
-    assert out_profile.bulge_radius > 0
+    assert out_profile.bulge_eccentricity is None, "expected the model to fall back for this pass, see docstring"
+    assert out_profile.bulge_radius is None
     assert out_profile.cross_section.area < in_profile().cross_section.area
 
     plot_comparison(
         "byon_pass_1_round_to_koval.png",
-        "Byon et al. (2017) Fig. 9(a): round -> Koval",
+        "Byon et al. (2017) Fig. 9(a): round -> Koval (falls back to the core model, see docstring)",
         out_profile,
         PASS_1_BOUNDARY_MM,
         reference_label="Digitized Fig. 9(a) (1/6 sector)",
+    )
+    plot_overlay(
+        "byon_pass_1_round_to_koval_overlay.png",
+        "Byon et al. (2017) Fig. 9(a): round -> Koval (fallback shape vs. digitized bulge)",
+        out_profile,
+        reconstruct_threefold_sector(PASS_1_BOUNDARY_MM),
+        reference_label="Digitized Fig. 9(a) (true bulge, for reference)",
     )
 
 
@@ -120,6 +137,13 @@ def test_byon_pass_2_koval_to_koval():
         PASS_2_BOUNDARY_MM,
         reference_label="Digitized Fig. 9(b) (1/6 sector)",
     )
+    plot_overlay(
+        "byon_pass_2_koval_to_koval_overlay.png",
+        "Byon et al. (2017) Fig. 9(b): Koval -> Koval (overlay)",
+        out_profile,
+        reconstruct_threefold_sector(PASS_2_BOUNDARY_MM),
+        reference_label="Digitized Fig. 9(b)",
+    )
 
 
 def test_byon_pass_3_koval_to_koval():
@@ -135,6 +159,13 @@ def test_byon_pass_3_koval_to_koval():
         out_profile,
         PASS_3_BOUNDARY_MM,
         reference_label="Digitized Fig. 10(a) (1/6 sector)",
+    )
+    plot_overlay(
+        "byon_pass_3_koval_to_koval_overlay.png",
+        "Byon et al. (2017) Fig. 10(a): Koval -> Koval (overlay)",
+        out_profile,
+        reconstruct_threefold_sector(PASS_3_BOUNDARY_MM),
+        reference_label="Digitized Fig. 10(a)",
     )
 
 
@@ -169,4 +200,11 @@ def test_byon_pass_7_koval_to_round():
         out_profile,
         PASS_7_BOUNDARY_MM,
         reference_label="Digitized Fig. 10(e) (1/6 sector)",
+    )
+    plot_overlay(
+        "byon_pass_7_koval_to_round_overlay.png",
+        "Byon et al. (2017) Fig. 10(e): Koval -> round (overlay)",
+        out_profile,
+        reconstruct_threefold_sector(PASS_7_BOUNDARY_MM),
+        reference_label="Digitized Fig. 10(e)",
     )

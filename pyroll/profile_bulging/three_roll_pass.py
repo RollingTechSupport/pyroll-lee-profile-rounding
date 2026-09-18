@@ -12,8 +12,13 @@ Implements the two analytical models this plugin is built around:
 
 Both models describe the free (out-of-contact) surface of the workpiece given the maximum
 width ``B1`` of the profile after rolling; how ``B1`` itself is predicted is the concern of a
-separate spread model (e.g. ``pyroll-wusatowski-spreading``), not of this plugin.
+separate spread model (e.g. ``pyroll-wusatowski-spreading``), not of this plugin. Since that is
+a separate, independently-calibrated model, the width it predicts is not guaranteed to be
+consistent with the eccentricity this plugin computes from it (e.g. a spread formula not
+calibrated for three-roll mills can under-predict the width for a given reduction); see
+:py:exc:`BulgeModelNotApplicable`.
 """
+import logging
 import math
 
 import numpy as np
@@ -22,6 +27,16 @@ from pyroll.core import Hook, Unit, Profile as BaseProfile, ThreeRollPass
 from pyroll.core.roll_pass.hookimpls.helpers import out_cross_section3
 
 from . import geometry
+
+log = logging.getLogger(__name__)
+
+
+class BulgeModelNotApplicable(Exception):
+    """Raised when the eccentricity/radius of a corner's free-surface arc are inconsistent
+    with the predicted width, so that the arc would have to be trusted well outside the
+    (roughly one corner's own 60 degree half-sector) range the source papers fitted and
+    validated it for - producing an unphysical, concave "necked" cross-section rather than a
+    plausible rolled shape. See :py:meth:`ThreeRollBulgingModel._corner_crossing_offset`."""
 
 ThreeRollPass.OutProfile.bulge_radius = Hook[float]()
 """Radius of curvature of the free (out-of-contact) surface, or ``None`` where the model
@@ -46,6 +61,10 @@ FE results of a Kocks mill (curved-groove three-roll mill)."""
 
 CIRCULAR_CROSS_SECTION_RESOLUTION = 360
 """Number of angular samples used to trace the bulged free surface in :py:meth:`_circular_cross_section`."""
+
+CROSSING_SEARCH_RESOLUTION = 121
+"""Number of angular samples used to search for the corner/natural-contour crossing in
+:py:meth:`ThreeRollBulgingModel._corner_crossing_offset`."""
 
 
 def _nearest_corner_angle(angle: float) -> float:
@@ -113,35 +132,80 @@ class ThreeRollBulgingModel(Unit):
 
         if not self.is_flat_roll and self.out_is_round:
             ds = self.roll_pass.inscribed_circle_diameter
-            return ds / 2 + eccentricity
+            radius = ds / 2 + eccentricity
+        else:
+            radius = profile.width / 2 - eccentricity
 
-        return profile.width / 2 - eccentricity
+        if radius <= 0:
+            raise BulgeModelNotApplicable(
+                f"{self.roll_pass}: the free-surface arc's radius of curvature is not positive "
+                f"({radius * 1e3:.2f} mm) for eccentricity {eccentricity * 1e3:.2f} mm; the "
+                f"predicted width is inconsistent with this model."
+            )
 
-    def _circular_cross_section(self, profile: BaseProfile) -> Polygon:
-        """Traces the bulged free surface directly, angle by angle: at each angle, the
-        boundary is at whichever is closer to the center - the nearest corner's bulge circle,
-        or the roll's own natural (un-bulged) contour. Near a corner, the bulge circle is the
-        tighter constraint (the free surface bulges outward less than the full, sharp-cornered
-        groove would allow); moving into the valley towards the next corner, the natural
-        contour eventually becomes tighter instead (full roll contact resumes), or, for large
-        eccentric bulges that reach past the valley, the neighboring corner's own circle takes
-        over first. Built by direct sampling rather than polygon boolean ops (union/intersection
-        of the three, generally overlapping, bulge circles) because the latter is prone to
-        spurious reentrant cusps wherever two corners' circles or a circle and the natural
-        contour cross without being tangent there."""
+        return radius
+
+    def _corner_crossing_offset(self, eccentricity: float, bulge_radius: float, boundary, far: float) -> float:
+        """The angular distance (rad) from a corner at which its bulge circle first becomes
+        as large as the roll's own natural (un-bulged) contour, searching outward up to one
+        corner's own 60 degree half-sector. By construction (3-fold symmetry) this is the same
+        for every corner and on both sides of each corner, so it only needs to be found once,
+        for the canonical corner (:py:data:`CORNER_ANGLES`\\ [0]).
+
+        Beyond this offset the free surface is the natural contour (full roll contact); within
+        it, the corner's own circle. Without this cutoff, a corner's circle - fitted and valid
+        only close to its own tip - can still be numerically smaller than the natural contour
+        far away near the *next* corner if its eccentricity is large enough, incorrectly
+        pulling the boundary inward there and producing an unphysical, concave "necked" shape
+        instead of the plausible, convexity-preserving cross-section the two source papers
+        actually depict. Returns ``None`` if no such crossing is found within the half-sector,
+        meaning the circle stays smaller than the natural contour all the way to the *next*
+        corner's own territory - i.e. the eccentricity/radius (and thus the predicted width
+        they were computed from) are inconsistent with this model, see
+        :py:exc:`BulgeModelNotApplicable`."""
+        half_sector = np.pi / len(CORNER_ANGLES)
+        corner = CORNER_ANGLES[0]
+
+        for offset in np.linspace(0, half_sector, CROSSING_SEARCH_RESOLUTION):
+            angle = corner + offset
+            circle_r = geometry.circle_radius_at_angle(eccentricity, corner, bulge_radius, angle)
+            natural_r = geometry.boundary_radius_at_angle(boundary, angle, far)
+            if circle_r >= natural_r:
+                return offset
+
+        return None
+
+    def _circular_cross_section(self, profile: BaseProfile, eccentricity: float, bulge_radius: float) -> Polygon:
+        """Traces the bulged free surface directly, angle by angle: within
+        :py:meth:`_corner_crossing_offset` of its nearest corner, the boundary follows that
+        corner's bulge circle; beyond it, the roll's own natural (un-bulged) contour (full roll
+        contact resumes). Built by direct sampling rather than polygon boolean ops
+        (union/intersection of the three, generally overlapping, bulge circles) because the
+        latter is prone to spurious reentrant cusps wherever two corners' circles, or a circle
+        and the natural contour, cross without being tangent there."""
         rp = self.roll_pass
         max_cross_section = out_cross_section3(rp, math.inf)
         boundary = max_cross_section.boundary
         far = 10 * profile.width
 
+        crossing_offset = self._corner_crossing_offset(eccentricity, bulge_radius, boundary, far)
+        if crossing_offset is None:
+            raise BulgeModelNotApplicable(
+                f"{self.roll_pass}: the free-surface arc (eccentricity="
+                f"{eccentricity * 1e3:.2f} mm, radius={bulge_radius * 1e3:.2f} mm) "
+                f"never becomes as large as the roll's natural contour within a 60 degree "
+                f"half-sector of its corner; the predicted width is inconsistent with this model."
+            )
+
         angles = np.linspace(-np.pi, np.pi, CIRCULAR_CROSS_SECTION_RESOLUTION, endpoint=False)
         points = []
         for angle in angles:
             corner = _nearest_corner_angle(angle)
-            bulge_radius_here = geometry.circle_radius_at_angle(
-                profile.bulge_eccentricity, corner, profile.bulge_radius, angle
-            )
-            radius = min(bulge_radius_here, geometry.boundary_radius_at_angle(boundary, angle, far))
+            offset = abs((angle - corner + np.pi) % (2 * np.pi) - np.pi)
+            if offset <= crossing_offset:
+                radius = geometry.circle_radius_at_angle(eccentricity, corner, bulge_radius, angle)
+            else:
+                radius = geometry.boundary_radius_at_angle(boundary, angle, far)
             points.append((radius * np.cos(angle), radius * np.sin(angle)))
 
         return Polygon(points)
@@ -178,16 +242,27 @@ class ThreeRollBulgingModel(Unit):
 
         return Polygon([v.coords[0] for v in vertices])
 
-    def cross_section(self, profile: BaseProfile) -> Polygon:
-        if profile.bulge_radius is None:
+    def cross_section(self, profile: BaseProfile, eccentricity: float, bulge_radius: float) -> Polygon:
+        if bulge_radius is None:
             return self._linear_chamfer_cross_section(profile)
-        return self._circular_cross_section(profile)
+        return self._circular_cross_section(profile, eccentricity, bulge_radius)
 
     def solve(self, in_profile: BaseProfile) -> BaseProfile:
-        eccentricity = self.eccentricity(in_profile)
+        try:
+            eccentricity = self.eccentricity(in_profile)
+            bulge_radius = self.bulge_radius(in_profile, eccentricity)
+            cross_section = self.cross_section(in_profile, eccentricity, bulge_radius)
+        except BulgeModelNotApplicable as e:
+            log.warning(
+                "%s Falling back to the un-bulged cross-section from pyroll-core for this profile.", e
+            )
+            in_profile.bulge_eccentricity = None
+            in_profile.bulge_radius = None
+            return in_profile
+
         in_profile.bulge_eccentricity = eccentricity
-        in_profile.bulge_radius = self.bulge_radius(in_profile, eccentricity)
-        in_profile.cross_section = self.cross_section(in_profile)
+        in_profile.bulge_radius = bulge_radius
+        in_profile.cross_section = cross_section
         return in_profile
 
 
