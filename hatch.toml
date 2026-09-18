@@ -11,7 +11,8 @@ path = ".venv"
 dependencies = [
     "pytest ~= 7.0",
     "pyroll-report ~= 3.0",
-    "pyroll-wusatowski-spreading ~=3.0"
+    "pyroll-wusatowski-spreading ~=3.0",
+    "matplotlib ~= 3.0"
 ]
 
 [envs.docs]
