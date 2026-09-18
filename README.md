@@ -26,12 +26,19 @@ All models here predict the free-surface shape **given** the maximum width of th
 after rolling; predicting that width (spread prediction) is a separate concern handled by
 other PyRolL plugins such as
 [`pyroll-wusatowski-spreading`](https://github.com/pyroll-project/pyroll-wusatowski-spreading).
+Since a generic spread formula needs the equivalent height/width of a (possibly 3-fold
+symmetric) cross-section, which `pyroll-core` does not define on its own,
+[`pyroll-lendl-equivalent-method`](https://pypi.org/project/pyroll-lendl-equivalent-method/)
+(Lendl's equivalent rectangle method, with a `ThreeRollPass`-specific formula) should be
+loaded alongside a spread-prediction plugin for realistic use.
 
 ## Usage
 
 ```python
 from pyroll.core import Profile, Roll, ThreeRollPass, FlatGroove
-import pyroll.profile_bulging  # registers the post-processors, no further setup needed
+import pyroll.wusatowski_spreading    # predicts the out-profile width
+import pyroll.lendl_equivalent_method  # equivalent_height/width Wusatowski's formula needs
+import pyroll.profile_bulging          # registers the bulging post-processors
 
 in_profile = Profile.round(diameter=35.8e-3, temperature=1323.15, strain=0,
                             material=["C45", "steel"], flow_stress=100e6, length=1,
@@ -44,7 +51,7 @@ roll_pass = ThreeRollPass(
 )
 
 out_profile = roll_pass.solve(in_profile)
-print(out_profile.bulge_radius, out_profile.cross_section.area)
+print(out_profile.width, out_profile.bulge_radius, out_profile.cross_section.area)
 ```
 
 The predicted, post-processed profile is the **return value** of `solve()` (as with any
@@ -63,7 +70,10 @@ hatch run test:all
 ```
 
 See `tests/test_three_roll_min_flat.py`, `tests/test_three_roll_byon_koval.py` and
-`tests/test_three_roll_bulge_formulas.py`.
+`tests/test_three_roll_bulge_formulas.py`. `tests/test_three_roll_end_to_end_spreading.py`
+complements these with a fully predictive (not pinned-width) demonstration, letting
+`pyroll-wusatowski-spreading` (fed by `pyroll-lendl-equivalent-method`) predict the
+out-profile width and this plugin's bulging model apply on top, as a real user would run it.
 
 ## Usage of the Preconfigured Hatch Scripts
 

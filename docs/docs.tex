@@ -30,6 +30,16 @@
     calibrated against FE data, and a free-surface-profile formula that consumes the
     predicted spread as an input.
 
+    A generic spread formula such as Wusatowski's needs the equivalent height and
+    width of the incoming and outgoing profile, which \texttt{pyroll-core} does not
+    define for arbitrary (in particular 3-fold symmetric) cross-sections on its own;
+    \texttt{pyroll-lendl-equivalent-method} supplies them via Lendl's equivalent
+    rectangle method, including a \texttt{ThreeRollPass}-specific formula. Loading it
+    together with a spread-prediction plugin lets a \texttt{ThreeRollPass} predict its
+    own out-profile width instead of requiring it to be set explicitly, and is
+    recommended for realistic use; Section~\ref{sec:validation} demonstrates the full
+    chain (Lendl + Wusatowski + this plugin) end to end.
+
     \section{Three-roll passes}\label{sec:three-roll}
 
     Three-roll (Kocks) mills roll a workpiece between three rolls arranged \SI{120}{\degree}
@@ -132,6 +142,25 @@
     \texttt{ThreeRollPass.OutProfile.bulge\_radius} (the latter is \texttt{None} for
     Min's linear-chord passes, which have no single radius of curvature).
 
+    For the circular-arc cases, the free surface is traced directly, angle by angle,
+    as whichever is closer to the profile's center: the nearest corner's bulge circle,
+    or the roll's own un-bulged contour (full roll contact). This is deliberately
+    \emph{not} built via the union of the three, generally overlapping, corner circles
+    intersected with the roll contour, since that is prone to a spurious reentrant
+    cusp wherever two such shapes cross without being exactly tangent there. Sampling
+    the two candidate radii directly instead guarantees a shape with no self-crossings
+    and keeps the residual non-smoothness to a minimum, but cannot remove it
+    entirely: two neighboring corners' bulge circles are not, in general, tangent to
+    each other or to the roll contour at the point where the model hands off between
+    them, so a small change in slope at that point is an inherent feature of
+    connecting three independently-fitted per-corner arc formulas into one closed
+    cross-section - most visible for a heavily-reduced first (round-input) pass, where
+    the eccentricity is large relative to the spacing between corners (see the round
+    $\to$ Koval case in Fig.~\ref{fig:validation-byon}). The source papers validate
+    each corner's own arc against a one sixth-symmetric sector of FE/experimental data
+    (Section~\ref{sec:validation}) and do not themselves address the smoothness of the
+    reassembled full cross-section.
+
     \section{Two-roll passes}\label{sec:two-roll}
 
     For completeness, and unchanged in this restructuring, the plugin also implements
@@ -199,16 +228,46 @@
     eccentricity against its defining equations, independent of any PyRolL geometry
     construction.
 
+    \texttt{tests/test\_three\_roll\_end\_to\_end\_spreading.py} complements this with
+    a fully predictive (not pinned-width) demonstration: two-pass sequences for both
+    mill types, with the out-profile width predicted by
+    \texttt{pyroll-wusatowski-\allowbreak spreading} fed by
+    \texttt{pyroll-lendl-\allowbreak equivalent-\allowbreak method}
+    (Section~\ref{sec:model-scope}), and this plugin's bulging model applying on top
+    with no manual intervention, as a real user of the plugin would run it.
+
+    \begin{figure}[htbp]
+        \centering
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../tests/output/min_sequence_predicted_spread.png}
+            \caption{Min-style flat-roll sequence.}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[t]{0.48\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../tests/output/byon_sequence_predicted_spread.png}
+            \caption{Byon-style Kocks-mill sequence.}
+        \end{subfigure}
+        \caption{Second-pass out-profile (right) with the width predicted end to end by
+            Lendl + Wusatowski, shown against the first-pass out-profile for scale
+            (left, not a reference shape here).}
+        \label{fig:validation-predicted}
+    \end{figure}
+
     \section{Usage instructions}\label{sec:usage-instructions}
 
     Importing the plugin registers its post-processors on \texttt{TwoRollPass} and
-    \texttt{ThreeRollPass}; no further setup is needed. A minimal three-roll example
-    (width fixed here for illustration; normally provided by a spread-prediction
-    plugin):
+    \texttt{ThreeRollPass}; no further setup is needed. Load a spread-prediction
+    plugin and the \texttt{pyroll-lendl-\allowbreak equivalent-\allowbreak method}
+    package alongside it (see Section~\ref{sec:model-scope}) to have the out-profile
+    width predicted rather than requiring it explicitly:
 
     %! language = Python
     \begin{minted}{python}
         from pyroll.core import Profile, Roll, ThreeRollPass, FlatGroove
+        import pyroll.wusatowski_spreading
+        import pyroll.lendl_equivalent_method
         import pyroll.profile_bulging
 
         in_profile = Profile.round(diameter=35.8e-3, temperature=1323.15, strain=0,
@@ -223,7 +282,7 @@
         )
 
         out_profile = roll_pass.solve(in_profile)
-        print(out_profile.bulge_radius, out_profile.cross_section.area)
+        print(out_profile.width, out_profile.bulge_radius, out_profile.cross_section.area)
     \end{minted}
 
     Shell command to build this documentation (requires a working LaTeX installation):

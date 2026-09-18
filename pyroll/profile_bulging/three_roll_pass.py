@@ -17,7 +17,7 @@ separate spread model (e.g. ``pyroll-wusatowski-spreading``), not of this plugin
 import math
 
 import numpy as np
-from shapely import Polygon, unary_union
+from shapely import Polygon
 from pyroll.core import Hook, Unit, Profile as BaseProfile, ThreeRollPass
 from pyroll.core.roll_pass.hookimpls.helpers import out_cross_section3
 
@@ -44,9 +44,12 @@ BYON_ECCENTRICITY_COEFFICIENT = 3.133
 """Coefficient of Byon et al.'s eccentricity formula ``Pc / B0 = 3.133 * F_H / F_0``, fitted to
 FE results of a Kocks mill (curved-groove three-roll mill)."""
 
-CORE_WIDTH_FRACTION = 0.9
-"""Fraction of the profile width up to which the plain (non-bulged) contour is trusted to
-already coincide with the bulged shape, used to fill the area between the three corner arcs."""
+CIRCULAR_CROSS_SECTION_RESOLUTION = 360
+"""Number of angular samples used to trace the bulged free surface in :py:meth:`_circular_cross_section`."""
+
+
+def _nearest_corner_angle(angle: float) -> float:
+    return min(CORNER_ANGLES, key=lambda corner: abs((angle - corner + np.pi) % (2 * np.pi) - np.pi))
 
 
 class ThreeRollBulgingModel(Unit):
@@ -115,18 +118,33 @@ class ThreeRollBulgingModel(Unit):
         return profile.width / 2 - eccentricity
 
     def _circular_cross_section(self, profile: BaseProfile) -> Polygon:
+        """Traces the bulged free surface directly, angle by angle: at each angle, the
+        boundary is at whichever is closer to the center - the nearest corner's bulge circle,
+        or the roll's own natural (un-bulged) contour. Near a corner, the bulge circle is the
+        tighter constraint (the free surface bulges outward less than the full, sharp-cornered
+        groove would allow); moving into the valley towards the next corner, the natural
+        contour eventually becomes tighter instead (full roll contact resumes), or, for large
+        eccentric bulges that reach past the valley, the neighboring corner's own circle takes
+        over first. Built by direct sampling rather than polygon boolean ops (union/intersection
+        of the three, generally overlapping, bulge circles) because the latter is prone to
+        spurious reentrant cusps wherever two corners' circles or a circle and the natural
+        contour cross without being tangent there."""
         rp = self.roll_pass
         max_cross_section = out_cross_section3(rp, math.inf)
-        core = out_cross_section3(rp, profile.width * CORE_WIDTH_FRACTION)
+        boundary = max_cross_section.boundary
+        far = 10 * profile.width
 
-        bulges = [
-            max_cross_section.intersection(
-                geometry.polar_point(profile.bulge_eccentricity, angle).buffer(profile.bulge_radius)
+        angles = np.linspace(-np.pi, np.pi, CIRCULAR_CROSS_SECTION_RESOLUTION, endpoint=False)
+        points = []
+        for angle in angles:
+            corner = _nearest_corner_angle(angle)
+            bulge_radius_here = geometry.circle_radius_at_angle(
+                profile.bulge_eccentricity, corner, profile.bulge_radius, angle
             )
-            for angle in CORNER_ANGLES
-        ]
+            radius = min(bulge_radius_here, geometry.boundary_radius_at_angle(boundary, angle, far))
+            points.append((radius * np.cos(angle), radius * np.sin(angle)))
 
-        return unary_union([core, *bulges])
+        return Polygon(points)
 
     def _linear_chamfer_cross_section(self, profile: BaseProfile) -> Polygon:
         """Min's straight-chord free-surface approximation (curved-hexagonal -> hexagonal and
