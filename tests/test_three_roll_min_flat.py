@@ -1,28 +1,15 @@
-"""
-Validates the flat-roll three-roll model of Min et al. (2003) against the digitized shapes of
-Fig. 2 / Fig. 13 of that paper (4-pass round -> curved-hexagonal -> hexagonal -> hexagonal
-sequence). The predicted out-profile width is pinned to the digitized shape's own spread tip
-radius for each pass (see ``tests/visual.py``), so that only the free-surface (bulge/rounding)
-model is under test, independent of spread prediction.
-
-Produces both side-by-side and overlaid comparison plots under ``tests/output/`` for human
-visual review; the overlay makes it easy to see that the small change in slope where the
-bulge circle hands off to the plain contour (see ``three_roll_pass.py``) is not visible at the
-scale of an actual rolled profile.
-"""
+"""Validates the flat-roll model of Min et al. (2003) against digitized Fig. 2/13 shapes."""
 from shapely import Polygon
 
 from pyroll.core import FlatGroove, Profile, Roll, ThreeRollPass
 
-import pyroll.profile_bulging  # noqa: F401  (registers the bulging post-processors)
+import pyroll.profile_bulging
 
 from data.min2003 import PASS_1_BOUNDARY_MM, PASS_2_BOUNDARY_MM, PROCESS_PARAMS
 from visual import max_radius_mm, mirror_right_half, pin_width, plot_comparison, plot_overlay, rotate_points
 
 
 def digitized_polygon_area_mm2(right_half_boundary_mm):
-    """Area of the full (mirrored) polygon described by a right-half boundary trace, via the
-    shoelace formula."""
     return Polygon(mirror_right_half(right_half_boundary_mm)).area
 
 

@@ -1,26 +1,9 @@
-"""
-End-to-end validation: unlike the other three-roll tests, which pin the out-profile width to
-a value read off the source papers' own figures (to validate the free-surface/bulge model in
-isolation from spread prediction, see ``tests/visual.py``), these tests let PyRolL predict the
-width itself, using Wusatowski's generic spread equation
-(``pyroll.wusatowski_spreading``) fed by Lendl's equivalent rectangle method
-(``pyroll.lendl_equivalent_method``, which supplies the ``equivalent_height``/
-``equivalent_width`` a generic spread formula needs, including for the 3-fold symmetric
-geometry of a ``ThreeRollPass``, where PyRolL core does not define them on its own).
-
-This is what a real user of the plugin does: solve a pass with a spread-prediction plugin
-loaded and this plugin's bulging model applying on top, with no manual intervention. Since
-Wusatowski's equation is a generic flat-rolling formula rather than Min's or Byon's own
-three-roll-specific spread equation, the predicted width is not expected to reproduce the
-source papers' values exactly (see ``tests/test_three_roll_min_flat.py`` and
-``tests/test_three_roll_byon_koval.py`` for that, tighter, comparison) - the point here is to
-exercise and visualize the full, realistic model chain.
-"""
+"""End-to-end validation: lets PyRolL predict the out-profile width via Wusatowski + Lendl instead of pinning it."""
 from pyroll.core import CircularOvalGroove, FlatGroove, Profile, Roll, ThreeRollPass
 
-import pyroll.wusatowski_spreading  # noqa: F401  (generic spread prediction)
-import pyroll.lendl_equivalent_method  # noqa: F401  (equivalent_height/width for the spread model)
-import pyroll.profile_bulging  # noqa: F401  (registers the bulging post-processors)
+import pyroll.wusatowski_spreading
+import pyroll.lendl_equivalent_method
+import pyroll.profile_bulging
 
 from data.min2003 import PROCESS_PARAMS
 from data.byon2017 import MILL_SCHEDULE
@@ -115,11 +98,7 @@ def test_byon_sequence_with_predicted_spread():
 
     for profile, label in [(profile_1, "stand_1"), (profile_2, "stand_2")]:
         assert profile.cross_section.is_valid, f"{label}: invalid cross-section"
-        # Either the bulge model applied (bulge_radius > 0), or it correctly recognized the
-        # predicted width/eccentricity combination as outside its valid range and fell back to
-        # the plain pyroll-core cross-section instead of an unphysical shape (bulge_radius is
-        # None then) - see BulgeModelNotApplicable and test_three_roll_byon_koval.py's
-        # test_byon_pass_1_round_to_koval, which hits exactly this for stand 1's own pass type.
+        # None means the model fell back (see BulgeModelNotApplicable); stand_1 hits this here.
         assert profile.bulge_radius is None or profile.bulge_radius > 0, f"{label}: invalid bulge_radius"
 
     assert profile_2.cross_section.area < profile_1.cross_section.area

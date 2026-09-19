@@ -1,8 +1,4 @@
-"""Shared helpers for the three-roll validation tests: pinning a profile's width to a known
-value (decoupling the bulge/profile-shape model under test from spread prediction, which is a
-separate concern - see the plugin docs), and rendering side-by-side comparison plots of the
-digitized paper data against PyRolL's prediction for human visual review.
-"""
+"""Helpers for pinning a profile's width and rendering comparison plots for human review."""
 from pathlib import Path
 
 import numpy as np
@@ -16,66 +12,48 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 def pin_width(roll_pass, in_profile, width):
-    """Solves ``roll_pass`` with its out-profile width fixed to ``width``, bypassing spread
-    prediction so that only the free-surface (bulge) model is under test."""
+    """Solves ``roll_pass`` with its out-profile width fixed, bypassing spread prediction."""
     roll_pass.out_profile = roll_pass.OutProfile(roll_pass, in_profile)
     roll_pass.out_profile.width = width
     return roll_pass.solve(in_profile)
 
 
 def max_radius_mm(points_mm):
-    """Distance from the origin of the farther of the two endpoints of a digitized boundary
-    trace, in millimeters, i.e. the spread tip radius B1. The endpoints (rather than the
-    global maximum over all points) are used because a traced arc runs from a roll-contact
-    reference point to the free-surface spread tip (or vice versa), and its extremes - not
-    necessarily an interior point - represent that geometry; interior points can locally
-    exceed the endpoints due to digitization noise without being the true spread tip."""
+    """Distance from the origin of the farther endpoint of a digitized boundary trace."""
     return max(np.hypot(*points_mm[0]), np.hypot(*points_mm[-1]))
 
 
 def rotate_points(points_mm, degrees):
-    """Rotates a list of (x, y) points by ``degrees`` about the origin - used to align a
-    digitized reference shape's own rotational phase with this plugin's corner-angle
-    convention (``CORNER_ANGLES`` in ``three_roll_pass.py``) for an overlay plot; the source
-    papers are not drawn in a consistent orientation relative to it."""
+    """Rotates a list of (x, y) points by ``degrees`` about the origin."""
     theta = np.radians(degrees)
     cos_t, sin_t = np.cos(theta), np.sin(theta)
     return [(x * cos_t - y * sin_t, x * sin_t + y * cos_t) for x, y in points_mm]
 
 
 def mirror_right_half(points_mm):
-    """Reconstructs a full, closed boundary from a right-half trace (as digitized for Min et
-    al.'s Fig. 2/13, mirror-symmetric about the y axis / z=0), by appending its mirror image."""
+    """Reconstructs a full, closed boundary from a right-half trace by appending its mirror."""
     left_half = [(-x, y) for x, y in reversed(points_mm)]
     return list(points_mm) + left_half
 
 
 def reconstruct_threefold_sector(sector_points_mm):
-    """Reconstructs a full, closed boundary from one sixth-symmetric sector (as digitized for
-    Byon et al.'s Figs. 8-10: one sector, from a corner at 90 degrees to the mirror line
-    towards the next corner at 30 degrees, given corner-to-valley) by mirroring it about the
-    corner's own axis (the y axis) to get one full 120 degree "lobe" through that corner, then
-    rotating that lobe by 0/+-120 degrees to complete the other two corners, matching this
-    plugin's own corner-angle convention (see ``CORNER_ANGLES`` in ``three_roll_pass.py``)."""
+    """Reconstructs a full, closed boundary from one sixth-symmetric sector by mirroring and threefold rotation."""
     corner_to_valley = np.array(sector_points_mm, dtype=float)
     valley_to_corner_mirrored = corner_to_valley[::-1] * np.array([-1, 1])
     lobe = np.vstack([valley_to_corner_mirrored, corner_to_valley[1:]])
 
-    full = []
+    full_boundary = []
     for angle_deg in (0, -120, -240):
         theta = np.radians(angle_deg)
         cos_t, sin_t = np.cos(theta), np.sin(theta)
         rotation = np.array([[cos_t, -sin_t], [sin_t, cos_t]])
-        full.extend((lobe @ rotation.T).tolist())
+        full_boundary.extend((lobe @ rotation.T).tolist())
 
-    return full
+    return full_boundary
 
 
 def plot_overlay(filename, title, pyroll_profile, reference_points_mm, reference_label="Digitized from paper"):
-    """Saves a plot overlaying PyRolL's predicted cross-section boundary directly on top of a
-    (already reconstructed to a full, closed boundary - see ``mirror_right_half`` /
-    ``reconstruct_threefold_sector``) digitized reference boundary from the source paper, for
-    human visual review of how closely, and how smoothly, the prediction matches it."""
+    """Saves a plot overlaying the digitized reference boundary directly on the PyRolL prediction."""
     fig, ax = plt.subplots(figsize=(5, 5))
 
     reference = np.array(reference_points_mm)
@@ -98,8 +76,7 @@ def plot_overlay(filename, title, pyroll_profile, reference_points_mm, reference
 
 
 def plot_comparison(filename, title, pyroll_profile, reference_points_mm, reference_label="Digitized from paper"):
-    """Saves a side-by-side comparison plot: PyRolL's predicted cross-section boundary vs.
-    a digitized reference boundary trace from the source paper, for human visual review."""
+    """Saves a side-by-side comparison plot: digitized reference boundary vs. PyRolL prediction."""
     fig, (ax_ref, ax_pyroll) = plt.subplots(1, 2, figsize=(9, 4.5))
 
     reference = np.array(reference_points_mm)

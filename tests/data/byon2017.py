@@ -1,26 +1,13 @@
-"""
-Digitized data from Byon, Kim, Kim and Lee (2017), "An approximate model to predict the
-surface profile of material sections in a 3-roll rolling process",
-J. Mech. Sci. Technol. 31(7), 3489-3497.
+"""Digitized data from Byon, Kim, Kim and Lee (2017), J. Mech. Sci. Technol. 31(7), 3489-3497."""
 
-Coordinates were read off the printed figures (300 dpi page renders) by eye against the
-printed axis gridlines; see the extraction notes for per-figure uncertainty estimates
-(typically +/-0.5-1 mm for the mm-scale surface-profile plots, +/-0.01-0.02 for the
-dimensionless spread/eccentricity plots). The surface-profile traces (Figs. 8-10) each show
-one sixth-symmetric sector of the true shape, in the paper's own local axis orientation
-(not aligned with this plugin's own corner-angle convention), in millimeters.
-"""
-
-# 7-pass Kocks mill at Seah Chang Won Special Steel Corporation (Fig. 5 / Sec. 5.1):
-# incoming stock 71 mm round, 6 Koval passes, final (7th) pass round at 35.4 mm.
+# Fig. 5/Sec. 5.1: 7-pass Kocks mill, 71 mm round stock into 6 Koval passes then round at 35.4 mm.
 MILL_SCHEDULE = dict(
     in_diameter=71e-3,
     out_diameter=35.4e-3,
     material="STS304",
 )
 
-# Table 1: fitted alpha (pass-dependent) / beta (shared) of the spread formula
-# B1 = alpha * B0 * {(FH/F0)*(Ldm/B0) - beta*(1 - DS/(2*R0))} + B0.
+# Table 1: fitted alpha/beta of B1 = alpha*B0*{(FH/F0)*(Ldm/B0) - beta*(1 - DS/(2*R0))} + B0.
 SPREAD_COEFFICIENTS = {
     "round_to_koval": dict(alpha=7.118, beta=0.145),
     "koval_to_koval": dict(alpha=9.963, beta=0.145),
@@ -37,8 +24,7 @@ ECCENTRICITY_FIG7 = [
 ]
 ECCENTRICITY_COEFFICIENT = 3.133
 
-# Fig. 9(a): surface profile at the actual mill's 1st pass (round -> Koval), reduction ratio
-# 14.7 %. One sixth-symmetric sector of the boundary (mm).
+# Fig. 9(a), pass 1 (round -> Koval, 14.7% reduction): one sixth-symmetric sector (mm).
 PASS_1_BOUNDARY_MM = [
     (0, 30.0),
     (3.5, 29.6),
@@ -53,8 +39,7 @@ PASS_1_BOUNDARY_MM = [
     (31, 18.0),
 ]
 
-# Fig. 9(b): surface profile at the actual mill's 2nd pass (Koval -> Koval), reduction ratio
-# 19.4 %.
+# Fig. 9(b), pass 2 (Koval -> Koval, 19.4% reduction).
 PASS_2_BOUNDARY_MM = [
     (0, 31.0),
     (3, 30.7),
@@ -69,8 +54,7 @@ PASS_2_BOUNDARY_MM = [
     (23.5, 13.8),
 ]
 
-# Fig. 10(a): surface profile at the actual mill's 3rd pass (Koval -> Koval), reduction ratio
-# 20.4 %.
+# Fig. 10(a), pass 3 (Koval -> Koval, 20.4% reduction).
 PASS_3_BOUNDARY_MM = [
     (0, 24.0),
     (3, 23.9),
@@ -84,8 +68,7 @@ PASS_3_BOUNDARY_MM = [
     (24.5, 14.2),
 ]
 
-# Fig. 10(e): surface profile at the actual mill's 7th (final, round) pass (Koval -> round),
-# reduction ratio 11.2 %.
+# Fig. 10(e), pass 7 (Koval -> round, 11.2% reduction, final pass).
 PASS_7_BOUNDARY_MM = [
     (0, 17.6),
     (2.5, 17.5),

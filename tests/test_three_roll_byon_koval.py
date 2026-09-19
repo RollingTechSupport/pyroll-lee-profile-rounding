@@ -1,24 +1,7 @@
-"""
-Validates the curved-groove (Kocks mill) three-roll model of Byon et al. (2017) against the
-digitized surface profiles of Fig. 9 / Fig. 10 of that paper, using the same real 7-pass mill
-schedule (Seah Chang Won Special Steel Corp.) the paper itself validates against: round stock
--> Koval (1st pass) -> Koval (2nd, 3rd passes) -> ... -> round (7th pass). Passes 1-3 use the
-exact groove geometry of the existing ``test_solve_3rp_round_oval_oval`` test, which already
-matches Byon's own Table/Fig. 5 values. The predicted out-profile width is pinned to each
-digitized shape's own spread tip radius (see ``tests/visual.py``), so that only the
-free-surface (bulge/rounding) model is under test, independent of spread prediction.
-
-Byon's Figs. 8-10 plot one sixth-symmetric sector of the shape in the paper's own local axis
-orientation, which does not necessarily align with this plugin's corner-angle convention;
-the comparison plots are therefore drawn side by side rather than overlaid, for a qualitative
-human visual review, with light quantitative sanity checks (validity, area ordering,
-non-negative eccentricity/radius) supplementing them.
-
-Produces comparison plots under ``tests/output/`` for human visual review.
-"""
+"""Validates the Kocks-mill model of Byon et al. (2017) against digitized Fig. 9/10 shapes, using the paper's own 7-pass mill schedule."""
 from pyroll.core import CircularOvalGroove, Profile, Roll, RoundGroove, ThreeRollPass
 
-import pyroll.profile_bulging  # noqa: F401  (registers the bulging post-processors)
+import pyroll.profile_bulging
 
 from data.byon2017 import (
     MILL_SCHEDULE,
@@ -90,20 +73,11 @@ def solve_pass_3():
 
 
 def test_byon_pass_1_round_to_koval():
-    """Demonstrates the fallback to the plain (un-bulged) pyroll-core cross-section: for this
-    pass (a large first-pass reduction, 71 mm round stock into a 59.9 mm inscribed-circle Koval
-    groove), Byon's own eccentricity formula predicts an eccentricity so large relative to the
-    spread tip radius that the free-surface arc would have to be trusted well outside the
-    corner-local range it was fitted for (see ``BulgeModelNotApplicable`` in
-    ``three_roll_pass.py``) for *any* reasonable groove shape at this inscribed circle diameter
-    - not just the approximate groove geometry used here, since varying the groove's own r2/
-    usable_width leaves the predicted eccentricity essentially unchanged. The plugin detects
-    this and falls back rather than producing the unphysical, "necked" shape an unguarded
-    union of the three corner circles would otherwise give."""
+    """This large first-pass reduction pushes Byon's eccentricity formula outside its valid range, so the model must fall back."""
     roll_pass, out_profile = solve_pass_1()
 
     assert out_profile.cross_section.is_valid
-    assert out_profile.bulge_eccentricity is None, "expected the model to fall back for this pass, see docstring"
+    assert out_profile.bulge_eccentricity is None
     assert out_profile.bulge_radius is None
     assert out_profile.cross_section.area < in_profile().cross_section.area
 
@@ -127,7 +101,7 @@ def test_byon_pass_2_koval_to_koval():
     roll_pass, out_profile = solve_pass_2()
 
     assert out_profile.cross_section.is_valid
-    assert out_profile.bulge_eccentricity == 0, "Koval -> Koval passes use a circle through the section's own center"
+    assert out_profile.bulge_eccentricity == 0
     assert out_profile.bulge_radius == out_profile.width / 2
 
     plot_comparison(
@@ -185,14 +159,13 @@ def test_byon_pass_7_koval_to_round():
     out_profile = pin_width(roll_pass, out_profile_3, target_width)
 
     assert out_profile.cross_section.is_valid
-    # Byon Eqs. (11)-(12): Rs = DS/2 + Pc, solved together with the geometric relation between
-    # B1, Pc and Rs; check that the returned (Pc, Rs) pair actually satisfies both.
-    ds = roll_pass.inscribed_circle_diameter
-    b1 = out_profile.width / 2
-    pc = out_profile.bulge_eccentricity
-    rs = out_profile.bulge_radius
-    assert abs(rs - (ds / 2 + pc)) < 1e-9
-    assert abs((b1 * (3 ** 0.5 / 2)) ** 2 + (b1 * 0.5 + pc) ** 2 - rs ** 2) < 1e-9 * rs ** 2
+    # Byon Eqs. (11)-(12): Rs = DS/2 + Pc together with the geometric relation between B1, Pc, Rs.
+    inscribed_diameter = roll_pass.inscribed_circle_diameter
+    out_radius = out_profile.width / 2
+    eccentricity = out_profile.bulge_eccentricity
+    bulge_radius = out_profile.bulge_radius
+    assert abs(bulge_radius - (inscribed_diameter / 2 + eccentricity)) < 1e-9
+    assert abs((out_radius * (3 ** 0.5 / 2)) ** 2 + (out_radius * 0.5 + eccentricity) ** 2 - bulge_radius ** 2) < 1e-9 * bulge_radius ** 2
 
     plot_comparison(
         "byon_pass_7_koval_to_round.png",

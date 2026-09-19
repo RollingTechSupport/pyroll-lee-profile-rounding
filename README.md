@@ -1,10 +1,9 @@
 # PyRolL Profile Bulging / Rounding Plugin
 
 A [PyRolL](https://pyroll.readthedocs.io) plugin predicting the free-surface ("bulge" /
-rounding) shape of a profile's cross-section after a rolling pass, i.e. the part of the
-boundary not in contact with the rolls. It focuses on **three-roll passes** (both flat-roll
-mills and Kocks mills with a curved/grooved roll surface), implementing the analytical models
-of:
+rounding) shape of a profile's cross-section after a **three-roll pass** (both flat-roll
+mills and Kocks mills with a curved/grooved roll surface), i.e. the part of the boundary not
+in contact with the rolls, implementing the analytical models of:
 
 - J.H. Min, H.C. Kwon, Y. Lee, J.S. Woo, Y.T. Im (2003), *"Analytical model for prediction of
   deformed shape in three-roll rolling process"*, J. Mater. Process. Technol. 140, 471-477 --
@@ -12,10 +11,6 @@ of:
 - S.-M. Byon, S.-R. Kim, T.-Y. Kim, Y. Lee (2017), *"An approximate model to predict the
   surface profile of material sections in a 3-roll rolling process"*, J. Mech. Sci. Technol.
   31(7), 3489-3497 -- Kocks mills (curved/grooved three-roll mills).
-
-For completeness, it also keeps (unchanged) the round-oval-round two-roll model of Lee and
-Choi (2000) / Lee and Goldhahn (2001) / Lee (2002), and a circular-arc construction for
-square-diamond-square / oval-square two-roll passes.
 
 See [`docs/docs.pdf`](docs/docs.pdf) for the full model description (equations, dispatch
 table, validation figures) and [`docs/docs.tex`](docs/docs.tex) for its LaTeX source.

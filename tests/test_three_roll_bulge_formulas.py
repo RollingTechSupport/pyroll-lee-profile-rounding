@@ -1,9 +1,4 @@
-"""
-Direct numeric validation of the eccentricity formulas against the FE calibration data
-digitized from the source papers (Min et al. 2003 Fig. 12, Byon et al. 2017 Fig. 7), and a
-closed-form self-consistency check of the Koval -> round eccentricity formula, independent of
-any PyRolL geometry construction.
-"""
+"""Numeric validation of the eccentricity formulas against digitized FE calibration data, independent of any PyRolL geometry."""
 import numpy as np
 
 from data.min2003 import ECCENTRICITY_COEFFICIENT as MIN_COEFFICIENT
@@ -33,27 +28,24 @@ def test_byon_eccentricity_coefficient_matches_fig7():
 
 
 def test_koval_to_round_eccentricity_boundary_condition():
-    """When the spread B1 exactly matches the roll's own inscribed radius DS/2 (no additional
-    free bulging beyond the round contact surface), Byon's Eqs. (11)-(12) must reduce to
-    Pc = 0 and Rs = DS/2 exactly (a perfectly round profile, fully on the roll contact)."""
-    ds = 0.040
+    """A spread tip radius exactly at the roll's own inscribed radius must give zero eccentricity."""
+    inscribed_diameter = 0.040
 
-    b1 = ds / 2
-    pc = ((ds / 2) ** 2 - b1 ** 2) / (b1 - ds)
-    rs = ds / 2 + pc
+    out_radius = inscribed_diameter / 2
+    eccentricity = ((inscribed_diameter / 2) ** 2 - out_radius ** 2) / (out_radius - inscribed_diameter)
+    bulge_radius = inscribed_diameter / 2 + eccentricity
 
-    assert abs(pc) < 1e-12
-    assert abs(rs - ds / 2) < 1e-12
+    assert abs(eccentricity) < 1e-12
+    assert abs(bulge_radius - inscribed_diameter / 2) < 1e-12
 
 
 def test_koval_to_round_eccentricity_satisfies_geometric_relation():
-    """For a range of B1 < DS, the closed-form Pc solving Byon's Eqs. (11)-(12) must satisfy
-    both equations simultaneously (see ThreeRollBulgingModel.eccentricity)."""
-    ds = 0.040
+    """The closed-form eccentricity must satisfy Byon's Eqs. (11)-(12) simultaneously."""
+    inscribed_diameter = 0.040
 
-    for b1 in np.linspace(0.030, 0.039, 10):
-        pc = ((ds / 2) ** 2 - b1 ** 2) / (b1 - ds)
-        rs = ds / 2 + pc
+    for out_radius in np.linspace(0.030, 0.039, 10):
+        eccentricity = ((inscribed_diameter / 2) ** 2 - out_radius ** 2) / (out_radius - inscribed_diameter)
+        bulge_radius = inscribed_diameter / 2 + eccentricity
 
-        lhs = (b1 * np.sin(np.deg2rad(60))) ** 2 + (b1 * np.cos(np.deg2rad(60)) + pc) ** 2
-        assert abs(lhs - rs ** 2) < 1e-9 * rs ** 2
+        lhs = (out_radius * np.sin(np.deg2rad(60))) ** 2 + (out_radius * np.cos(np.deg2rad(60)) + eccentricity) ** 2
+        assert abs(lhs - bulge_radius ** 2) < 1e-9 * bulge_radius ** 2

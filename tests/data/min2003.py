@@ -1,14 +1,4 @@
-"""
-Digitized data from Min, Kwon, Lee, Woo and Im (2003), "Analytical model for prediction of
-deformed shape in three-roll rolling process", J. Mater. Process. Technol. 140, 471-477.
-
-Coordinates were read off the printed figures (300 dpi page renders) by eye against the
-printed axis gridlines; see the extraction notes for per-figure uncertainty estimates
-(typically +/-0.5-1 mm for the mm-scale shape plots, +/-0.01-0.03 for the dimensionless
-spread/eccentricity plots). Boundary traces are given as one representative half/quarter of
-the true 3-fold symmetric shape, in the paper's own local axis orientation (not aligned with
-this plugin's own corner-angle convention), in millimeters.
-"""
+"""Digitized data from Min, Kwon, Lee, Woo and Im (2003), J. Mater. Process. Technol. 140, 471-477."""
 
 # Table 1: rolling conditions of the 4-pass experiment (Figs. 2 and 13).
 PROCESS_PARAMS = dict(
@@ -18,8 +8,7 @@ PROCESS_PARAMS = dict(
     in_diameter=35.8e-3,
 )
 
-# Fig. 2(a) / Fig. 13(a): 1st pass, round -> curved-hexagonal. Boundary trace of the right half
-# of the shape (mm), starting at the top of the flat cap and ending at the bottom tip.
+# Fig. 2(a)/13(a), pass 1 (round -> curved-hexagonal): right-half boundary trace (mm).
 PASS_1_BOUNDARY_MM = [
     (0, 14.5),
     (6, 14.5),
@@ -34,8 +23,7 @@ PASS_1_BOUNDARY_MM = [
     (0.0, -19.0),
 ]
 
-# Fig. 2(b) / Fig. 13(b): 2nd pass, curved-hexagonal -> hexagonal. Boundary trace of the right
-# half of the shape (mm): flat top, slightly bulged sides/bottom.
+# Fig. 2(b)/13(b), pass 2 (curved-hexagonal -> hexagonal): right-half boundary trace (mm).
 PASS_2_BOUNDARY_MM = [
     (0, 13.3),
     (9, 13.3),
@@ -45,16 +33,14 @@ PASS_2_BOUNDARY_MM = [
     (0, -16.2),
 ]
 
-# Fig. 9: least-squares fit constants of the spread formula
-# Delta B / B0 = alpha * (Ldm/B0) * (FH/FO) + beta, by pass-type.
+# Fig. 9: fitted alpha/beta of Delta B / B0 = alpha * (Ldm/B0) * (FH/FO) + beta, by pass type.
 SPREAD_COEFFICIENTS = {
     "round_to_curved_hexagonal": dict(alpha=8.22, beta=1.03),
     "curved_hexagonal_to_hexagonal": dict(alpha=5.76, beta=1.00),
     "hexagonal_to_hexagonal": dict(alpha=7.17, beta=0.97),
 }
 
-# Fig. 12: eccentricity e/B0 vs. area fraction FH/FO (round -> curved-hexagonal pass), read off
-# the plotted FE data points, with the fitted line e/B0 = 2.40 * FH/FO.
+# Fig. 12: e/B0 vs. FH/FO FE data points (round -> curved-hexagonal), fitted line e/B0 = 2.40 * FH/FO.
 ECCENTRICITY_FIG12 = [
     (0.095, 0.250),
     (0.115, 0.275),

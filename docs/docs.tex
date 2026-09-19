@@ -13,11 +13,8 @@
     \maketitle
 
     This plugin predicts the free-surface ("bulge" / rounding) shape of a profile's
-    cross-section after a rolling pass, i.e. the part of the boundary that is not in
-    contact with the rolls. It implements analytical models from the literature for
-    both two-roll and three-roll passes, with a particular focus on three-roll (Kocks
-    mill / flat-roll block) passes, which is the subject of this restructured version
-    of the plugin.
+    cross-section after a three-roll (Kocks mill / flat-roll block) rolling pass, i.e.
+    the part of the boundary that is not in contact with the rolls.
 
     \section{Model scope}\label{sec:model-scope}
 
@@ -176,7 +173,7 @@
     rp.height)"} in the legend) is replaced near the corner by the two straight chords
     from $W_1$ (magenta/blue, where each roll face crosses the circle of radius $B_1$)
     to the corner tip $B_1$ itself, exactly as implemented in
-    \texttt{\_linear\_chamfer\_cross\_section}. The right panel shows why the circular
+    \texttt{linear\_chamfer\_cross\_section}. The right panel shows why the circular
     cases are \emph{not} built by simply assigning each of the three corner circles
     (radius $R_s$, center offset by eccentricity $P_c$) to its own \SI{120}{\degree}
     sector without further restriction: for a large eccentricity relative to the
@@ -189,7 +186,7 @@
     paper actually depicts -- this is, in fact, precisely the unphysical shape a
     predicted width can trigger if the plugin does \emph{not} check for it (see
     Section~\ref{subsec:fallback} below): restricting each corner's circle to its own
-    corner-local range via \texttt{\_corner\_crossing\_offset}, and falling back
+    corner-local range via \texttt{corner\_crossing\_offset}, and falling back
     entirely when even that corner-local range cannot be made consistent with the
     roll's natural contour, is what avoids ever emitting a shape like this one.
 
@@ -206,7 +203,7 @@
         \begin{subfigure}[t]{0.48\textwidth}
             \centering
             \includegraphics[width=\textwidth]{figures/construction_naive_union_pitfall.png}
-            \caption{Naively assigning each of the three corner circles to its own \SI{120}{\degree} sector, unrestricted (large-eccentricity round $\to$ Koval case): a pinched "clover", exactly the kind of unphysical shape \texttt{\_corner\_crossing\_offset} and the Section~\ref{subsec:fallback} fallback exist to prevent.}
+            \caption{Naively assigning each of the three corner circles to its own \SI{120}{\degree} sector, unrestricted (large-eccentricity round $\to$ Koval case): a pinched "clover", exactly the kind of unphysical shape \texttt{corner\_crossing\_offset} and the Section~\ref{subsec:fallback} fallback exist to prevent.}
         \end{subfigure}
         \caption{Illustrative constructions behind the linear-chamfer and circular-arc
             cross-section builders (exploratory scripts, not shipped model code).}
@@ -218,7 +215,7 @@
     Because the predicted width $B_1$ comes from an independent, separately calibrated
     spread model (Section~\ref{sec:model-scope}), it is not guaranteed to be
     consistent with the eccentricity/radius this plugin computes from it. Before
-    tracing the free surface, \texttt{\_corner\_crossing\_offset} searches outward from
+    tracing the free surface, \texttt{corner\_crossing\_offset} searches outward from
     a corner, up to its own \SI{60}{\degree} half-sector, for the angle at which that
     corner's own bulge circle first becomes at least as large as the roll's natural
     (un-bulged) contour; beyond that offset the plain contour is used instead (this is
@@ -245,14 +242,6 @@
     fallback (angular, core) shape next to the true digitized bulge, honestly showing
     where the model declines to guess rather than silently producing an implausible
     shape.
-
-    \section{Two-roll passes}\label{sec:two-roll}
-
-    For completeness, and unchanged in this restructuring, the plugin also implements
-    the round-oval-round free-surface model of \textcite{lee2000,lee2001,lee2002} and a
-    circular-arc construction for square-diamond-square / oval-square passes (module
-    \texttt{pyroll.profile\_bulging.two\_roll\_pass}), dispatched analogously by the
-    classifiers of the incoming profile and the current pass.
 
     \section{Validation}\label{sec:validation}
 
@@ -416,8 +405,8 @@
 
     \section{Usage instructions}\label{sec:usage-instructions}
 
-    Importing the plugin registers its post-processors on \texttt{TwoRollPass} and
-    \texttt{ThreeRollPass}; no further setup is needed. Load a spread-prediction
+    Importing the plugin registers its post-processor on \texttt{ThreeRollPass}; no
+    further setup is needed. Load a spread-prediction
     plugin and the \texttt{pyroll-lendl-\allowbreak equivalent-\allowbreak method}
     package alongside it (see Section~\ref{sec:model-scope}) to have the out-profile
     width predicted rather than requiring it explicitly:
