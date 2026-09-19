@@ -75,6 +75,26 @@ def plot_overlay(filename, title, pyroll_profile, reference_points_mm, reference
     plt.close(fig)
 
 
+def plot_sequence(filename, title, labeled_profiles):
+    """Saves a row of cross-section plots, one per ``(label, profile)`` pair, for visual review of a pass sequence."""
+    fig, axes = plt.subplots(1, len(labeled_profiles), figsize=(3.2 * len(labeled_profiles), 3.6))
+
+    for ax, (label, profile) in zip(axes, labeled_profiles):
+        xs, ys = profile.cross_section.exterior.xy
+        ax.plot(np.array(xs) * 1000, np.array(ys) * 1000, "-", color="tab:blue")
+        ax.set_aspect("equal")
+        ax.axhline(0, color="gray", lw=0.5)
+        ax.axvline(0, color="gray", lw=0.5)
+        ax.set_title(f"{label}\nwidth={profile.width * 1000:.1f} mm, area={profile.cross_section.area * 1e6:.0f} mm2", fontsize=8)
+        ax.set_xlabel("z (mm)")
+
+    axes[0].set_ylabel("y (mm)")
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(OUTPUT_DIR / filename, dpi=130)
+    plt.close(fig)
+
+
 def plot_comparison(filename, title, pyroll_profile, reference_points_mm, reference_label="Digitized from paper"):
     """Saves a side-by-side comparison plot: digitized reference boundary vs. PyRolL prediction."""
     fig, (ax_ref, ax_pyroll) = plt.subplots(1, 2, figsize=(9, 4.5))
