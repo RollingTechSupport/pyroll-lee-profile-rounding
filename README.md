@@ -1,34 +1,93 @@
-# PyRoll Plugin
+# PyRolL Profile Bulging / Rounding Plugin
 
-Template for PyRoll Plugin Repositories.
+A [PyRolL](https://pyroll.readthedocs.io) plugin predicting the free-surface ("bulge" /
+rounding) shape of a profile's cross-section after a **three-roll pass** (both flat-roll
+mills and Kocks mills with a curved/grooved roll surface), i.e. the part of the boundary not
+in contact with the rolls, implementing the analytical models of:
 
-Please follow the following instructions when creating your own PyRoll plugins:
+- J.H. Min, H.C. Kwon, Y. Lee, J.S. Woo, Y.T. Im (2003), *"Analytical model for prediction of
+  deformed shape in three-roll rolling process"*, J. Mater. Process. Technol. 140, 471-477 --
+  flat-roll three-roll mills.
+- S.-M. Byon, S.-R. Kim, T.-Y. Kim, Y. Lee (2017), *"An approximate model to predict the
+  surface profile of material sections in a 3-roll rolling process"*, J. Mech. Sci. Technol.
+  31(7), 3489-3497 -- Kocks mills (curved/grooved three-roll mills).
 
-- The folder `pyroll` is a namespace package, place your plugin package therein to make it discoverable by the CLI for example by just renaming the nested `plugin` package to the desired).
+See [`docs/docs.pdf`](docs/docs.pdf) for the full model description (equations, dispatch
+table, validation figures) and [`docs/docs.tex`](docs/docs.tex) for its LaTeX source.
 
-- Use [`pytest`](https://docs.pytest.org) for creating unit tests. Place all test files in the `tests` folder.
+## Model scope
 
-- Update the `pyproject.toml` with your metadata. It is recommended to use [`hatch`](https://hatch.pypa.io) to maintain dependencies, as is preconfigured. It is recommended that the plugin major version corresponds to the PyRoll Core major version (so plugin versions 2.x.x working with `pyroll-core` 2.x.x).
+All models here predict the free-surface shape **given** the maximum width of the profile
+after rolling; predicting that width (spread prediction) is a separate concern handled by
+other PyRolL plugins such as
+[`pyroll-wusatowski-spreading`](https://github.com/pyroll-project/pyroll-wusatowski-spreading).
+Since a generic spread formula needs the equivalent height/width of a (possibly 3-fold
+symmetric) cross-section, which `pyroll-core` does not define on its own,
+[`pyroll-lendl-equivalent-method`](https://pypi.org/project/pyroll-lendl-equivalent-method/)
+(Lendl's equivalent rectangle method, with a `ThreeRollPass`-specific formula) should be
+loaded alongside a spread-prediction plugin for realistic use.
 
-- Place documentation in the `docs` folder:
-    - you may provide a printable documentation using LaTeX based on the `docs.tex` template and the
-      provided `PyRollDocs` class
-    - you may provide a web documentation using Markdown or RST rendered by GitHub or external tools
-      like [Sphinx](https://www.sphinx-doc.org)
-    - you may provide a printable documentation built from Markdown or RST by tools such
-      as [Pandoc](https://pandoc.org/)
-    - if appropriate, include the result PDF in the commit and link it from `README.md` like [so](docs/docs.pdf)
-    - include model and usage information in the documentation
+## Usage
 
-- Please use a permissive license such as BSD or MIT
+```python
+from pyroll.core import Profile, Roll, ThreeRollPass, FlatGroove
+import pyroll.wusatowski_spreading    # predicts the out-profile width
+import pyroll.lendl_equivalent_method  # equivalent_height/width Wusatowski's formula needs
+import pyroll.profile_bulging          # registers the bulging post-processors
 
-- Edit this readme file with contents of your own needs.
-    
-- If you want your plugin to be listed on the main documentation website (see [here](https://pyroll.readthedocs.io/en/latest/plugins/index.html)), please contact the maintainers preferably using an issue or PR.
+in_profile = Profile.round(diameter=35.8e-3, temperature=1323.15, strain=0,
+                            material=["C45", "steel"], flow_stress=100e6, length=1,
+                            density=7.5e3, specific_heat_capacity=690, thermal_conductivity=23)
+
+roll_pass = ThreeRollPass(
+    roll=Roll(groove=FlatGroove(r1=5e-3, usable_width=45e-3, pad_angle=30),
+              nominal_radius=185e-3, rotational_frequency=248 / 60),
+    inscribed_circle_diameter=29e-3,
+)
+
+out_profile = roll_pass.solve(in_profile)
+print(out_profile.width, out_profile.bulge_radius, out_profile.cross_section.area)
+```
+
+The predicted, post-processed profile is the **return value** of `solve()` (as with any
+PyRolL post-processor); `roll_pass.out_profile` itself reflects the pre-post-processing
+(un-bulged) geometry.
+
+### Fallback for inconsistent predicted widths
+
+The out-profile width comes from an independently calibrated spread model
+(see "Model scope" above), so it is not guaranteed to be consistent with the
+eccentricity/radius this plugin computes from it. Where a corner's bulge circle can't
+be reconciled with the roll's own contour within its own 60° corner sector, the plugin
+falls back to returning the profile with its plain, un-bulged cross-section from
+`pyroll-core` unchanged, rather than emit an implausible "necked" shape — in this case
+`bulge_eccentricity`/`bulge_radius` are both `None`. See `docs/docs.tex`
+(Sections "Construction method" and "Fallback for inconsistent predicted widths") for
+the full explanation and figures, and
+`tests/test_three_roll_byon_koval.py::test_byon_pass_1_round_to_koval` for a worked
+example that hits it.
+
+## Validation
+
+The three-roll models are validated against the source papers' own figures by reproducing
+their process parameters and comparing the predicted cross-section against boundary
+coordinates digitized from the printed figures (`tests/data/`). Running the test suite
+regenerates side-by-side comparison plots under `tests/output/` for human visual review:
+
+```
+hatch run test:all
+```
+
+See `tests/test_three_roll_min_flat.py`, `tests/test_three_roll_byon_koval.py` and
+`tests/test_three_roll_bulge_formulas.py`. `tests/test_three_roll_end_to_end_spreading.py`
+complements these with a fully predictive (not pinned-width) demonstration, letting
+`pyroll-wusatowski-spreading` (fed by `pyroll-lendl-equivalent-method`) predict the
+out-profile width and this plugin's bulging model apply on top, as a real user would run it.
 
 ## Usage of the Preconfigured Hatch Scripts
 
-To build the docs use (needs a working LaTeX installation)
+To build the docs use (needs a working LaTeX installation, incl. `siunitx`, `subcaption`,
+`biblatex`/`biber` and `minted`/`pygments`)
 
     hatch run docs:build
 

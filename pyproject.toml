@@ -1,6 +1,6 @@
 [project]
 name = "pyroll-profile-bulging"
-description = "Plugin for PyRolL to model the bulging of profiles after rolling."
+description = "Plugin for PyRolL to model the free-surface bulging/rounding of profiles after three-roll (flat-roll and Kocks mill) passes."
 authors = [
     { name = "Christoph Renzing", email = "christoph.renzing@imf.tu-freiberg.de" }
 ]
